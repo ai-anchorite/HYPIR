@@ -70,7 +70,7 @@ elif args.captioner_type == "gpt":
             "`GPT_BASE_URL`, and `GPT_MODEL` in your .env file. "
             "Falling back to no captioner."
         )
-        captioner = EmptyCaptioner(device=device_for_captioner)
+        captioner = EmptyCaptioner(device=device)
     else:
         captioner = GPTCaptioner(
             api_key=os.getenv("GPT_API_KEY"),
@@ -78,7 +78,7 @@ elif args.captioner_type == "gpt":
             model=os.getenv("GPT_MODEL"),
         )
 else:
-    captioner = EmptyCaptioner(device=device_for_captioner)
+    captioner = EmptyCaptioner(device=device)
 
 to_tensor = transforms.ToTensor()
 
