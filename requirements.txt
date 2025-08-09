@@ -18,3 +18,4 @@ pydantic==2.11.7
 opencv-python-headless==4.11.0.86
 timm==1.0.15
 gradio==5.42.0
+hf_xet
