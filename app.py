@@ -13,6 +13,7 @@ from accelerate.utils import set_seed
 from omegaconf import OmegaConf
 from dotenv import load_dotenv
 from PIL import Image
+from huggingface_hub import hf_hub_download
 
 from HYPIR.enhancer.sd2 import SD2Enhancer
 from HYPIR.utils.captioner import EmptyCaptioner, GPTCaptioner, Florence2Captioner
@@ -81,6 +82,29 @@ else:
 
 to_tensor = transforms.ToTensor()
 
+# --- Pre-download and cache the HYPIR model ---
+print("Checking for HYPIR model weights...")
+model_dir = "models"
+os.makedirs(model_dir, exist_ok=True) # Ensure the 'models' directory exists
+
+model_path = os.path.join(model_dir, "HYPIR_sd2.pth")
+
+if not os.path.exists(model_path):
+    print(f"Downloading HYPIR model to {model_path}...")
+    try:
+        hf_hub_download(
+            repo_id="lxq007/HYPIR",
+            filename="HYPIR_sd2.pth",
+            local_dir=model_dir
+        )
+        print("Download complete.")
+    except Exception as e:
+        print(f"❌ Failed to download model: {e}")
+        # Exit if the model is essential for the app to run
+        sys.exit(1)
+else:
+    print("HYPIR model already exists.")
+        
 config = OmegaConf.load(args.config)
 if config.base_model_type == "sd2":
     model = SD2Enhancer(
