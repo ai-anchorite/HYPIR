@@ -85,7 +85,7 @@ to_tensor = transforms.ToTensor()
 # --- Pre-download and cache the HYPIR model ---
 print("Checking for HYPIR model weights...")
 model_dir = "models"
-os.makedirs(model_dir, exist_ok=True) # Ensure the 'models' directory exists
+os.makedirs(model_dir, exist_ok=True)
 
 model_path = os.path.join(model_dir, "HYPIR_sd2.pth")
 
@@ -326,11 +326,10 @@ with block:
                         image = gr.Image(type="pil", label="Input Image")
                         run_single = gr.Button(value="Run", variant="primary")
                     with gr.Column():
-                        result_slider = gr.ImageSlider(label="Before | After", interactive=False, show_label=True)
+                        result_slider = gr.ImageSlider(label="Before | After", interactive=False, show_label=True, max_height=900)
                         with gr.Group():
-                            with gr.Row():
-                                autosave_toggle = gr.Checkbox(label="Autosave", value=True)
-                                manual_save_button = gr.Button(value="Save Image", variant="primary",visible=False)
+                            autosave_toggle = gr.Checkbox(label="Autosave", value=True)
+                            manual_save_button = gr.Button(value="Save Image", variant="primary",visible=False)
 
             # --- BATCH PROCESS TAB ---
             with gr.TabItem("Batch Process"):
