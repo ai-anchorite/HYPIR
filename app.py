@@ -143,10 +143,20 @@ def toggle_autosave(choice):
     return gr.update(visible=not choice)
 
 
+def toggle_scale_inputs(mode):
+    """Show/hide scale inputs based on selected mode."""
+    if mode == "factor":
+        return gr.update(visible=True), gr.update(visible=False)
+    else:
+        return gr.update(visible=False), gr.update(visible=True)
+
+
 def process(
     image,
     prompt,
+    scale_by,
     upscale,
+    target_longest_side,
     patch_size,
     stride,
     seed,
@@ -171,7 +181,21 @@ def process(
         image = image.convert("RGB")
 
         if max_size is not None:
-            out_w, out_h = tuple(int(x * upscale) for x in image.size)
+            if scale_by == "factor":
+                out_w, out_h = tuple(int(x * upscale) for x in image.size)
+            else:
+                w, h = image.size
+                tls = int(target_longest_side) if target_longest_side is not None else None
+                if tls is None or tls <= 0:
+                    status_message = "❌ Failed: Please provide a valid Target Longest Side when using longest_side."
+                    return [original_image, error_image], status_message, original_image
+                if h >= w:
+                    new_h = tls
+                    new_w = int(w * (tls / h))
+                else:
+                    new_w = tls
+                    new_h = int(h * (tls / w))
+                out_w, out_h = new_w, new_h
             if out_w * out_h > max_size[0] * max_size[1]:
                 status_message = (
                     f"❌ Failed: The requested resolution ({out_h}, {out_w}) exceeds the maximum pixel limit."
@@ -194,7 +218,9 @@ def process(
         pil_image = model.enhance(
             lq=image_tensor,
             prompt=prompt,
+            scale_by=scale_by,
             upscale=upscale,
+            target_longest_side=int(target_longest_side) if scale_by == "longest_side" and target_longest_side is not None else None,
             patch_size=patch_size,
             stride=stride,
             return_type="pil",
@@ -219,7 +245,9 @@ def process(
 def batch_process(
     files,
     prompt,
+    scale_by,
     upscale,
+    target_longest_side,
     patch_size,
     stride,
     seed,
@@ -266,7 +294,9 @@ def batch_process(
                 pil_image = model.enhance(
                     lq=image_tensor,
                     prompt=current_prompt,
+                    scale_by=scale_by,
                     upscale=upscale,
+                    target_longest_side=int(target_longest_side) if scale_by == "longest_side" and target_longest_side is not None else None,
                     patch_size=patch_size,
                     stride=stride,
                     return_type="pil",
@@ -365,7 +395,10 @@ with block:
                 if captioner.is_functional else "Prompt (Auto-captioning disabled)"
             ))
             with gr.Row():
-                upscale = gr.Slider(minimum=1, maximum=8, value=1, scale=3, label="Upscale Factor", step=1)
+                scale_by = gr.Radio(choices=["factor", "longest_side"], value="factor", scale=1, label="Scale By")
+                upscale = gr.Slider(minimum=1, maximum=8, value=1, label="Upscale Factor", step=1, scale=3, visible=True)
+                target_longest_side = gr.Slider(minimum=512, maximum=4096, value=1536, step=64, label="Target Longest Side (px)", scale=3, visible=False)
+            with gr.Row():
                 seed = gr.Number(label="Seed", value=-1, scale=1, info="-1 = random")
             with gr.Row():
                 with gr.Accordion("Options", open=False):
@@ -421,7 +454,7 @@ with block:
 
     run_single.click(
         fn=process,
-        inputs=[image, prompt, upscale, patch_size, stride, seed, autosave_toggle, caption_detail_toggle, prompt_suffix],
+        inputs=[image, prompt, scale_by, upscale, target_longest_side, patch_size, stride, seed, autosave_toggle, caption_detail_toggle, prompt_suffix],
         outputs=[result_slider, status, image_state],
     )
     autosave_toggle.change(
@@ -435,11 +468,16 @@ with block:
         outputs=status,
     )
     open_folder_button.click(fn=open_output_folder)
+    scale_by.change(
+        fn=toggle_scale_inputs,
+        inputs=scale_by,
+        outputs=[upscale, target_longest_side],
+    )
 
     # Batch Process Listener
     run_batch.click(
         fn=batch_process,
-        inputs=[batch_files, prompt, upscale, patch_size, stride, seed, caption_detail_toggle, prompt_suffix],
+        inputs=[batch_files, prompt, scale_by, upscale, target_longest_side, patch_size, stride, seed, caption_detail_toggle, prompt_suffix],
         outputs=[status]
     )
     
