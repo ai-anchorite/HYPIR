@@ -3,17 +3,18 @@ import contextlib
 from functools import lru_cache
 
 import torch
-#from modules import errors
-
-if sys.platform == "darwin":
-    from modules import mac_specific
+"""
+Device helpers adapted to work without external dependencies.
+Removes use of AUTOMATIC1111's `modules.mac_specific` and relies solely on
+PyTorch to detect CUDA/MPS and to manage caches.
+"""
 
 
 def has_mps() -> bool:
-    if sys.platform != "darwin":
+    try:
+        return torch.backends.mps.is_available()
+    except Exception:
         return False
-    else:
-        return mac_specific.has_mps
 
 
 def get_cuda_device_string():
@@ -46,7 +47,11 @@ def torch_gc():
             torch.cuda.ipc_collect()
 
     if has_mps():
-        mac_specific.torch_mps_gc()
+        # Best-effort cache cleanup for MPS; function exists in modern PyTorch
+        try:
+            torch.mps.empty_cache()
+        except Exception:
+            pass
 
 
 def enable_tf32():
@@ -62,13 +67,26 @@ def enable_tf32():
 
 
 enable_tf32()
-#errors.run(enable_tf32, "Enabling TF32")
-
 cpu = torch.device("cpu")
-device = device_interrogate = device_gfpgan = device_esrgan = device_codeformer = torch.device("cuda")
-dtype = torch.float16
-dtype_vae = torch.float16
-dtype_unet = torch.float16
+
+# Choose default device and data types depending on backend
+if torch.cuda.is_available():
+    device = device_interrogate = device_gfpgan = device_esrgan = device_codeformer = torch.device("cuda")
+    dtype = torch.float16
+    dtype_vae = torch.float16
+    dtype_unet = torch.float16
+elif has_mps():
+    device = device_interrogate = device_gfpgan = device_esrgan = device_codeformer = torch.device("mps")
+    # Float32 is safer on MPS to reduce NaNs with certain ops
+    dtype = torch.float32
+    dtype_vae = torch.float32
+    dtype_unet = torch.float32
+else:
+    device = device_interrogate = device_gfpgan = device_esrgan = device_codeformer = torch.device("cpu")
+    dtype = torch.float32
+    dtype_vae = torch.float32
+    dtype_unet = torch.float32
+
 unet_needs_upcast = False
 
 
@@ -93,11 +111,16 @@ def autocast(disable=False):
     if disable:
         return contextlib.nullcontext()
 
-    return torch.autocast("cuda")
+    # Only enable autocast on CUDA; for MPS/CPU return a no-op context
+    if torch.cuda.is_available():
+        return torch.autocast(device_type="cuda", dtype=torch.float16)
+    return contextlib.nullcontext()
 
 
 def without_autocast(disable=False):
-    return torch.autocast("cuda", enabled=False) if torch.is_autocast_enabled() and not disable else contextlib.nullcontext()
+    if torch.cuda.is_available() and torch.is_autocast_enabled() and not disable:
+        return torch.autocast(device_type="cuda", enabled=False)
+    return contextlib.nullcontext()
 
 
 class NansException(Exception):
